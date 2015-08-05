@@ -23,6 +23,7 @@
 #include <linux/bug.h>
 
 #include <net/nl802154.h>
+#include <net/genetlink.h>
 
 struct wpan_phy;
 struct wpan_phy_cca;
@@ -76,6 +77,9 @@ struct cfg802154_ops {
 	int	(*disassoc_req)(struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev,
 						u16 device_panid, u64 device_address,
 						u8 disassociate_reason, u8 tx_indirect);
+	int	(*register_beacon_listener)( struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev, struct genl_info *info );
+	int	(*deregister_beacon_listener)( struct wpan_phy *wpan_phy );
+
 };
 
 static inline bool
@@ -244,5 +248,7 @@ static inline const char *wpan_phy_name(struct wpan_phy *phy)
 {
 	return dev_name(&phy->dev);
 }
+
+int nl802154_beacon_notify_indication( struct ieee802154_beacon_indication *beacon_notify, struct genl_info *info );
 
 #endif /* __NET_CFG802154_H */

@@ -259,7 +259,6 @@ rdev_assoc_req(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_d
 				u8 capability_information )
 {
 	int ret = 0;
-
 	return ret;
 }
 
@@ -273,7 +272,6 @@ rdev_register_assoc_req_listener(struct cfg802154_registered_device *rdev, struc
 
 	return ret;
 }
-
 
 static inline void
 rdev_deregister_assoc_req_listener(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_dev,
@@ -312,5 +310,23 @@ rdev_deregister_disassoc_req_listener(struct cfg802154_registered_device *rdev, 
 {
 	// XXX: implement me
 }
+
+static inline int
+rdev_beacon_register_listener(struct cfg802154_registered_device *rdev,
+ struct wpan_dev *wpan_dev, struct genl_info *info )
+{
+int ret = 0;
+
+ret = rdev->ops->register_beacon_listener(&rdev->wpan_phy, wpan_dev, info );
+
+return ret;
+}
+
+static inline void
+rdev_beacon_deregister_listener(struct cfg802154_registered_device *rdev )
+{
+rdev->ops->deregister_beacon_listener(&rdev->wpan_phy );
+}
+
 
 #endif /* __CFG802154_RDEV_OPS */
