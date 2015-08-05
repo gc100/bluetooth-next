@@ -195,4 +195,43 @@ rdev_set_lbt_mode(struct cfg802154_registered_device *rdev,
 	return ret;
 }
 
+static inline int
+rdev_ed_scan(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_dev, u8 page, u32 scan_channels, u8 *level, size_t nlevel, u8 duration )
+{
+	int ret = 0;
+
+	ret = rdev->ops->ed_scan(&rdev->wpan_phy, wpan_dev, page, scan_channels, level, nlevel, duration );
+
+	return ret;
+}
+
+static inline int
+rdev_assoc_req(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_dev,
+				u8 channel_number, u8 channel_page, u16 coord_pan_id, u64 coord_address,
+				u8 capability_information )
+{
+	int ret = 0;
+
+	return ret;
+}
+
+static inline int
+rdev_register_assoc_req_listener(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_dev,
+								void (*callback)( struct sk_buff *, void *), void *arg )
+{
+	int ret = 0;
+
+	// XXX: implement me
+
+	return ret;
+}
+
+
+static inline void
+rdev_deregister_assoc_req_listener(struct cfg802154_registered_device *rdev, struct wpan_dev *wpan_dev,
+								void (*callback)( struct sk_buff *, void *), void *arg )
+{
+	// XXX: implement me
+}
+
 #endif /* __CFG802154_RDEV_OPS */
