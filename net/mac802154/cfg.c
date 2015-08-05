@@ -541,4 +541,3 @@ const struct cfg802154_ops mac802154_config_ops = {
 	.register_beacon_listener = ieee802154_register_beacon_listener,
 	.deregister_beacon_listener = ieee802154_deregister_beacon_listener,
 };
-};
