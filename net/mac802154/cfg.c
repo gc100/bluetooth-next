@@ -287,11 +287,14 @@ ieee802154_ed_scan(struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev,
 }
 
 static int
-ieee802154_register_beacon_listener(struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev, struct genl_info *info)
+ieee802154_register_beacon_listener(struct wpan_phy *wpan_phy,
+		                            void (*callback)(struct sk_buff *skb, void *args),
+		                            struct work_struct *work )
 {
 	int ret = 0;
 	struct ieee802154_local *local = wpan_phy_priv(wpan_phy);
-	local->beacon_listener = info;
+	local->beacon_work = work;
+	local->callback = callback;
 	ret = drv_start( local );
 	return ret;
 }
@@ -301,16 +304,19 @@ ieee802154_deregister_beacon_listener( struct wpan_phy *wpan_phy )
 {
 	int ret = 0;
 	struct ieee802154_local *local = wpan_phy_priv(wpan_phy);
-	local->beacon_listener = NULL;
+	local->beacon_work = NULL;
+	local->callback = NULL;
 	return ret;
 }
 
+#if 0
 int cfg802154_inform_beacon( struct ieee802154_beacon_indication *beacon_notify, struct genl_info *info )
 {
 	int ret;
 	ret = nl802154_beacon_notify_indication( beacon_notify, info );
 	return ret;
 }
+#endif
 
 const struct cfg802154_ops mac802154_config_ops = {
 	.add_virtual_intf_deprecated = ieee802154_add_iface_deprecated,

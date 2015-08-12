@@ -2,6 +2,7 @@
 #define __CFG802154_RDEV_OPS
 
 #include <net/cfg802154.h>
+#include <net/ieee802154_netdev.h>
 
 #include "core.h"
 #include "trace.h"
@@ -233,20 +234,19 @@ rdev_deregister_assoc_req_listener(struct cfg802154_registered_device *rdev, str
 }
 
 static inline int
-rdev_beacon_register_listener(struct cfg802154_registered_device *rdev,
-		  struct wpan_dev *wpan_dev, struct genl_info *info )
+rdev_register_beacon_listener(struct cfg802154_registered_device *rdev, void (*callback)( struct sk_buff *skb, void *args ), struct work_struct *work )
 {
 	int ret = 0;
 
-	ret = rdev->ops->register_beacon_listener(&rdev->wpan_phy, wpan_dev, info );
+	ret = rdev->ops->register_beacon_listener( &rdev->wpan_phy, callback, work );
 
 	return ret;
 }
 
 static inline void
-rdev_beacon_deregister_listener(struct cfg802154_registered_device *rdev )
+rdev_deregister_beacon_listener(struct cfg802154_registered_device *rdev )
 {
-	rdev->ops->deregister_beacon_listener(&rdev->wpan_phy );
+	rdev->ops->deregister_beacon_listener( &rdev->wpan_phy );
 }
 
 #endif /* __CFG802154_RDEV_OPS */

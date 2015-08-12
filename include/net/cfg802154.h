@@ -23,10 +23,12 @@
 #include <linux/bug.h>
 
 #include <net/nl802154.h>
+//#include <net/ieee802154_netdev.h>
 #include <net/genetlink.h>
 
 struct wpan_phy;
 struct wpan_phy_cca;
+
 
 struct cfg802154_ops {
 	struct net_device * (*add_virtual_intf_deprecated)(struct wpan_phy *wpan_phy,
@@ -66,7 +68,8 @@ struct cfg802154_ops {
 				struct wpan_dev *wpan_dev, bool mode);
 	int	(*ed_scan)(struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev,
 	            u8 page, u32 scan_channels, u8 *level, size_t nlevel, u8 duration );
-	int	(*register_beacon_listener)( struct wpan_phy *wpan_phy, struct wpan_dev *wpan_dev, struct genl_info *info );
+    int (*register_beacon_listener)(struct wpan_phy *wpan_phy, void (*callback)(struct sk_buff *skb, void *args),
+									struct work_struct *work );
 	int	(*deregister_beacon_listener)( struct wpan_phy *wpan_phy );
 };
 

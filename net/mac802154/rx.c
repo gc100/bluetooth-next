@@ -45,6 +45,7 @@ static int ieee802154_deliver_skb(struct sk_buff *skb)
 	return netif_receive_skb(skb);
 }
 
+#if 0
 static void rx_receive_work( struct work_struct *work )
 {
 	struct workbeaconreceive *wrk;
@@ -56,7 +57,9 @@ static void rx_receive_work( struct work_struct *work )
 	kfree( wrk );
 	return;
 }
+#endif
 
+#if 0
 static int ieee802154_deliver_bcn(struct sk_buff *skb, const struct ieee802154_hdr *hdr, struct ieee802154_local *local)
 {
     int ret = 0;
@@ -117,6 +120,7 @@ static int ieee802154_deliver_bcn(struct sk_buff *skb, const struct ieee802154_h
 out:
     return ret;
 }
+#endif
 
 static int
 ieee802154_subif_frame(struct ieee802154_sub_if_data *sdata,
@@ -181,14 +185,11 @@ ieee802154_subif_frame(struct ieee802154_sub_if_data *sdata,
 
 	switch (hdr->fc.type) {
 	case IEEE802154_FC_TYPE_DATA:
-		printk( KERN_INFO "Received Data Frame Control\n");
 		return ieee802154_deliver_skb(skb);
 	case IEEE802154_FC_TYPE_BEACON:
-		printk( KERN_INFO "beacon listener address: %p\n", sdata->local->beacon_listener );
-		if( sdata->local->beacon_listener ) {
-			printk( KERN_INFO "Received Beacon Frame Control\n");
-			//return ieee802154_deliver_bcn(skb, hdr, sdata->local->beacon_listener);
-			return ieee802154_deliver_bcn(skb, hdr, sdata->local);
+		if( sdata->local->beacon_work && sdata->local->callback ) {
+			sdata->local->callback( skb, sdata->local->beacon_work );
+			return 0;
 		}
 		break;
 	default:

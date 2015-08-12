@@ -1523,7 +1523,7 @@ static int nl802154_assoc_rsp( struct sk_buff *skb, struct genl_info *info )
 	return r;
 }
 
-static void nl802154_beacon_work( struct work_struct *work ) {
+static void nl802154_beacon_ind_timeout( struct work_struct *work ) {
 
 	struct work802154 *wrk;
 	struct cfg802154_registered_device *rdev;
@@ -1535,26 +1535,21 @@ static void nl802154_beacon_work( struct work_struct *work ) {
 
 	rdev = info->user_ptr[0];
 
-	rdev_beacon_deregister_listener( rdev );
+    rdev_deregister_beacon_listener( rdev );
 
 	complete( &wrk->completion );
 	kfree( wrk );
 	return;
 }
 
-int nl802154_beacon_notify_indication( struct ieee802154_beacon_indication *beacon_notify, struct genl_info *info )
+static void nl802154_beacon_ind_complete( struct sk_buff *skb_in, void *arg )
 {
-	int ret = 0;
-	int i;
-	struct sk_buff *msg;
-	void *hdr;
-	struct net *net;
-	struct nlattr *nl_pan_desc;
-	struct nlattr *nl_sdu;
-	struct cfg802154_registered_device *rdev = info->user_ptr[0];
+	printk( KERN_INFO "Inside %s\n", __FUNCTION__);
+}
 
-	dev_dbg( &rdev->wpan_phy.dev, "Inside %s\n", __FUNCTION__);
-
+#if 0
+static void (nl802154_send_beacon)
+{
 	msg = genlmsg_new( NLMSG_DEFAULT_SIZE, GFP_KERNEL );
 	if ( NULL == msg ) {
 		ret = -ENOMEM;
@@ -1625,6 +1620,7 @@ free_reply:
 out:
 	return ret;
 }
+#endif
 
 static int nl802154_get_beacon_indication( struct sk_buff *skb, struct genl_info *info )
 {
@@ -1633,14 +1629,14 @@ static int nl802154_get_beacon_indication( struct sk_buff *skb, struct genl_info
 	u16 timeout_ms;
 	struct cfg802154_registered_device *rdev;
 	struct work802154 *wrk;
-
-	struct device *dev;
+	struct wpan_dev *wpan_dev;
+	struct net_device *dev;
 
 	rdev = info->user_ptr[0];
+	wpan_dev = (struct wpan_dev *) &rdev->wpan_phy.dev;
+	dev = (struct net_device *) &wpan_dev->netdev;
 
-	dev = &rdev->wpan_phy.dev;
-
-	dev_dbg( &rdev->wpan_phy.dev, "Inside %s\n", __FUNCTION__);
+	dev_dbg( &dev->dev, "Inside %s\n", __FUNCTION__);
 
 	if ( ! ( info->attrs[ NL802154_ATTR_BEACON_INDICATION_TIMEOUT ] ) ) {
 		r = -EINVAL;
@@ -1656,22 +1652,25 @@ static int nl802154_get_beacon_indication( struct sk_buff *skb, struct genl_info
 	timeout_ms = nla_get_u16( info->attrs[ NL802154_ATTR_BEACON_INDICATION_TIMEOUT ] );
 	wrk->info = info;
 
-	init_completion( &wrk->completion );
-	INIT_DELAYED_WORK( &wrk->work, nl802154_beacon_work );
-	schedule_delayed_work( &wrk->work, msecs_to_jiffies( timeout_ms ) );
+    // Enable reception of beacon packets, and sending out netlink response
+	r = rdev_register_beacon_listener( rdev, nl802154_beacon_ind_complete, &wrk->work.work );
 	if ( 0 != r ) {
-		dev_err( dev, "nl802154_add_work failed (%d)\n", r );
+		dev_err( &dev->dev, "rdev_register_beacon_ind_listener failed (%d)\n", r );
 		goto free_wrk;
 	}
 
-	// Explicitely turn the radio on
-        // Enable reception of packets, and sending out netlink response
-	r = rdev_beacon_register_listener(rdev, NULL, info );
+	init_completion( &wrk->completion );
+	INIT_DELAYED_WORK( &wrk->work, nl802154_beacon_ind_timeout );
+	r = schedule_delayed_work( &wrk->work, msecs_to_jiffies( timeout_ms ) ) ? 0 : -EALREADY;
+	if ( 0 != r ) {
+		dev_err( &dev->dev, "nl802154_add_work failed (%d)\n", r );
+		goto free_wrk;
+	}
 
-        // Wait for work function to signal completion after a 10 second time-out.  This should be
-        // enough time for us to receive a beacon frame and send the indication back to user space
-        // before returning (and closing the netlink socket).
-        // Data is queued up and sent out once this doit() function returns.
+    // Wait for work function to signal completion after timeout_ms.  This should be enough
+	// time for us to receive a beacon frame and send the indication back to user space
+    // before returning (and closing the netlink socket).
+    // Data is queued up and sent out once this doit() function returns.
 
 	wait_for_completion( &wrk->completion );
 
