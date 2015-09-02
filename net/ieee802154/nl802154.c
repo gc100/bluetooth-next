@@ -315,7 +315,7 @@ static const struct nla_policy nl802154_policy[NL802154_ATTR_MAX+1] = {
 	[NL802154_ATTR_DISASSOC_TIMEOUT_MS] = { .type = NLA_U16, },
 
 	[NL802154_ATTR_BEACON_SEQUENCE_NUMBER] = { .type = NLA_U8, },
-	[NL802154_ATTR_PAN_DESCRIPTOR] { .type = NLA_NESTED, },
+//	[NL802154_ATTR_PAN_DESCRIPTOR] { .type = NLA_NESTED, },
 	[NL802154_ATTR_PEND_ADDR_SPEC] = { .type = NLA_U8 },
 	[NL802154_ATTR_ADDR_LIST] = { .type = NLA_NESTED },
 	[NL802154_ATTR_SDU_LENGTH] = { .type = NLA_U32 },
@@ -1356,6 +1356,7 @@ ieee802154_send_beacon_command_frame( struct net_device *netdev, u8 cmd_frame_id
 	dst_addr.mode = IEEE802154_ADDR_SHORT;
 	dst_addr.pan_id = IEEE802154_PANID_BROADCAST;
 	dst_addr.short_addr = IEEE802154_ADDR_BROADCAST;
+	//dst_addr.short_addr =  0xbeef;
 
 	cb = mac_cb_init(skb);
 	cb->type = IEEE802154_FC_TYPE_MAC_CMD;
@@ -1404,6 +1405,7 @@ void nl802154_active_scan_pan_descriptor_send( struct sk_buff *receive_skb, cons
 {
 	struct ieee802154_beacon_indication beacon_notify;
 	struct nlattr *nl_pan_desc_entry;
+	struct nlattr *nl_sdu;
 
 	struct cfg802154_registered_device *rdev;
 	struct wpan_dev *wpan_dev;
@@ -1412,6 +1414,8 @@ void nl802154_active_scan_pan_descriptor_send( struct sk_buff *receive_skb, cons
 
 	struct sk_buff *msg;
 	void *hdr;
+	int i;
+	//u8 gts_descriptor_count;
 
 	wrk = container_of( to_delayed_work( (struct work_struct *)arg ), struct work802154, work );
 
@@ -1437,14 +1441,26 @@ void nl802154_active_scan_pan_descriptor_send( struct sk_buff *receive_skb, cons
 		goto free_reply;
 	}
 
+	printk(KERN_INFO "SDU: %02x %02x %02x %02x %02x %02x %02x %02x",
+			receive_skb->data[0],
+			receive_skb->data[1],
+			receive_skb->data[2],
+			receive_skb->data[3],
+			receive_skb->data[4],
+			receive_skb->data[5],
+			receive_skb->data[6],
+			receive_skb->data[7]);
+
 	/* The Source PAN Identifier and Source Address fields contain the PAN identifier and address,
 	 * respectively, of the device transmitting the beacon. */
 	beacon_notify.pan_desc.src_addr        = mac_cb(receive_skb)->source.short_addr;
 	beacon_notify.pan_desc.src_pan_id      = mac_cb(receive_skb)->source.pan_id;
-	beacon_notify.pan_desc.channel_num     = wpan_dev->wpan_phy->current_channel;
-	beacon_notify.pan_desc.channel_page    = wpan_dev->wpan_phy->current_channel;
-	beacon_notify.pan_desc.superframe_spec = 0;
-	beacon_notify.pan_desc.gts_permit      = 0;
+	beacon_notify.pan_desc.channel_num     = rdev->wpan_phy.current_channel;
+	beacon_notify.pan_desc.channel_page    = rdev->wpan_phy.current_page;
+	beacon_notify.pan_desc.superframe_spec = receive_skb->data[1] << 8 | receive_skb->data[0] << 0;
+	printk( KERN_INFO "SFspec: %04x", beacon_notify.pan_desc.superframe_spec );
+	beacon_notify.pan_desc.gts_permit      = receive_skb->data[2] & 0x80;
+	//gts_descriptor_count = receive_skb->data[2] & 0x07;
 	beacon_notify.pan_desc.lqi             = mac_cb(receive_skb)->lqi;
 	beacon_notify.pan_desc.time_stamp      = 0;
 	beacon_notify.pan_desc.sec_status      = 0;
@@ -1453,14 +1469,17 @@ void nl802154_active_scan_pan_descriptor_send( struct sk_buff *receive_skb, cons
 	beacon_notify.pan_desc.key_src         = 0;
 	beacon_notify.pan_desc.key_index       = receive_hdr->sec.key_id;
 
+	beacon_notify.pend_addr_spec = receive_skb->data[3];
+	beacon_notify.sdu_len = receive_skb->len - receive_skb->data_len - 4;   /* Pass up only beacon payload (5.2.2.1 IEEE 802.15.4 spec) */
+	memcpy(&beacon_notify.sdu, receive_skb->data + 4, beacon_notify.sdu_len);
 
 	nl_pan_desc_entry = nla_nest_start( msg, NL802154_ATTR_PAN_DESCRIPTOR );
 	if ( nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_SRC_ADDR_MODE, beacon_notify.pan_desc.src_addr_mode ) ||
 			nla_put_u16( msg, NL802154_ATTR_PAN_DESC_SRC_PAN_ID, beacon_notify.pan_desc.src_pan_id) ||
-			nla_put_u32( msg, NL802154_ATTR_PAN_DESC_SRC_ADDR, beacon_notify.pan_desc.src_addr) ||
+			nla_put_u64( msg, NL802154_ATTR_PAN_DESC_SRC_ADDR, beacon_notify.pan_desc.src_addr) ||
 			nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_CHANNEL_NUM, beacon_notify.pan_desc.channel_num) ||
 			nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_CHANNEL_PAGE, beacon_notify.pan_desc.channel_page) ||
-			nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_SUPERFRAME_SPEC, beacon_notify.pan_desc.superframe_spec) ||
+			nla_put_u16( msg, NL802154_ATTR_PAN_DESC_SUPERFRAME_SPEC, beacon_notify.pan_desc.superframe_spec) ||
 			nla_put_u32( msg, NL802154_ATTR_PAN_DESC_GTS_PERMIT, beacon_notify.pan_desc.gts_permit) ||
 			nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_LQI, beacon_notify.pan_desc.lqi) ||
 			nla_put_u32( msg, NL802154_ATTR_PAN_DESC_TIME_STAMP, beacon_notify.pan_desc.time_stamp) ||
@@ -1473,6 +1492,22 @@ void nl802154_active_scan_pan_descriptor_send( struct sk_buff *receive_skb, cons
 		goto free_reply;
 	}
 	nla_nest_end( msg, nl_pan_desc_entry );
+
+	if( nla_put_u8( msg, NL802154_ATTR_PEND_ADDR_SPEC, beacon_notify.pend_addr_spec ) ) {
+		goto free_reply;
+	}
+
+	if( nla_put_u32( msg, NL802154_ATTR_SDU_LENGTH, beacon_notify.sdu_len) ) {
+		goto free_reply;
+	}
+
+	nl_sdu = nla_nest_start( msg, NL802154_ATTR_SDU );
+	for (i = 0; i <= beacon_notify.sdu_len; i++) {
+		if( nla_put_u8( msg, NL802154_ATTR_SDU_ENTRY, beacon_notify.sdu[i] ) ) {
+            goto free_reply;
+		}
+	}
+	nla_nest_end( msg, nl_sdu );
 
 	wrk->cmd_stuff.active_scan.result_list_size++;
 
@@ -1680,7 +1715,7 @@ static int nl802154_active_scan_req( struct sk_buff *skb, struct genl_info *info
 		wrk->cmd_stuff.active_scan.result_list_size = 0; //Initalize the result list
 		wrk->cmd_stuff.active_scan.current_channel = 0;
 		wrk->cmd_stuff.active_scan.status = IEEE802154_SUCCESS;
-		cnf = nl802154_active_scan_cnf;
+		cnf = nl802154_active_scan_cnf; // sends beacon command frames
 		break;
 	default:
 		dev_err( dev, "invalid scan type %u\n", scan_type );
@@ -1799,6 +1834,8 @@ static void nl802154_assoc_req_complete( struct sk_buff *skb_in, void *arg ) {
 
 	u16 short_addr = *( (u16 *) &skb_in->data[1] );
 	u8 status = skb_in->data[3];
+
+	printk(KERN_INFO "In fn %s ext_addr: %08llx\n", __FUNCTION__, mac_cb(skb_in)->source.extended_addr);
 
 	cancel_delayed_work( &wrk->work );
 
@@ -2259,7 +2296,7 @@ static int nl802154_beacon_ind( struct genl_info *info, struct ieee802154_beacon
 	    nla_put_u32( msg, NL802154_ATTR_PAN_DESC_SRC_ADDR, ind->pan_desc.src_addr) ||
 	    nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_CHANNEL_NUM, ind->pan_desc.channel_num) ||
 	    nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_CHANNEL_PAGE, ind->pan_desc.channel_page) ||
-	    nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_SUPERFRAME_SPEC, ind->pan_desc.superframe_spec) ||
+	    nla_put_u16( msg, NL802154_ATTR_PAN_DESC_SUPERFRAME_SPEC, ind->pan_desc.superframe_spec) ||
 	    nla_put_u32( msg, NL802154_ATTR_PAN_DESC_GTS_PERMIT, ind->pan_desc.gts_permit) ||
 	    nla_put_u8 ( msg, NL802154_ATTR_PAN_DESC_LQI, ind->pan_desc.lqi) ||
 	    nla_put_u32( msg, NL802154_ATTR_PAN_DESC_TIME_STAMP, ind->pan_desc.time_stamp) ||
